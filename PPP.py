@@ -123,7 +123,7 @@ async def cmd_start_update_single_title_only(message: types.Message, state: FSMC
     )
     await state.set_state(UpdateContent.waiting_for_title)
 
-@dp.message(Command(commands=['setevents']))
+@dp.message(Command(commands=['setevent'])) # Changed from 'setevents' to 'setevent'
 async def cmd_start_update_events(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
@@ -274,11 +274,17 @@ async def process_photo(message: types.Message, state: FSMContext):
 async def process_not_photo(message: types.Message):
     await message.reply("❌ الرجاء إرسال صورة فقط.")
 
-@dp.message(Command(commands=['banner', 'abyss', 'stygian', 'theater']))
+@dp.message(Command(commands=['banner', 'spiral_abyss', 'stygian', 'theater'])) # Changed 'abyss' to 'spiral_abyss'
 async def cmd_show_content_single(message: types.Message):
     section_key = message.text[1:]
     
-    cursor.execute("SELECT title, name, end_time_asia, end_time_europe, end_time_america, image_file_id FROM content WHERE section=?", (section_key,))
+    # Map the command to the database section name
+    if section_key == 'spiral_abyss':
+        db_section = 'abyss'
+    else:
+        db_section = section_key
+    
+    cursor.execute("SELECT title, name, end_time_asia, end_time_europe, end_time_america, image_file_id FROM content WHERE section=?", (db_section,))
     row = cursor.fetchone()
     
     if not row:
@@ -292,6 +298,7 @@ async def cmd_show_content_single(message: types.Message):
     else:
         arabic_section_titles = {
             'abyss': 'الأبِس',
+            'spiral_abyss': 'الأبِس', # Added for the new command
             'stygian': 'الاوستيجيان',
             'theater': 'مسرح الخيال',
             'banner': 'البنر'
@@ -334,7 +341,7 @@ async def cmd_show_content_single(message: types.Message):
     else:
         await message.reply(text, parse_mode="Markdown")
 
-@dp.message(Command(commands=['events']))
+@dp.message(Command(commands=['event'])) # Changed from 'events' to 'event'
 async def cmd_show_events(message: types.Message):
     now_utc = datetime.now(timezone.utc)
     now_str = now_utc.strftime("%Y-%m-%d %H:%M:%S")
@@ -415,13 +422,13 @@ async def cmd_start(message: types.Message):
         "مرحبًا! أنا بوت مواعيد Genshin.\n"
         "الأوامر:\n"
         "/banner - عرض البنر الحالي\n"
-        "/events - عرض الأحداث\n"
-        "/abyss - عرض موعد الأبِس\n"
+        "/event - عرض الأحداث\n" # Changed from 'events' to 'event'
+        "/spiral_abyss - عرض موعد الأبِس\n" # Changed from 'abyss' to 'spiral_abyss'
         "/stygian - عرض موعد أوستيجيان\n"
         "/theater - عرض موعد مسرح الخيال\n\n"
         "للمشرفين:\n"
         "/setbanner - تحديث البنر (يرسل نص ثم صورة)\n"
-        "/setevents - إضافة حدث جديد (يرسل نص فقط)\n"
+        "/setevent - إضافة حدث جديد (يرسل نص فقط)\n" # Changed from 'setevents' to 'setevent'
         "/delevents - حذف جميع الأحداث (للمشرفين)\n"
         "/setabyss - تحديث الأبِس (يرسل نص ثم صورة)\n"
         "/setstygian - تحديث أوستيجيان (يرسل نص ثم صورة)\n"
