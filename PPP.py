@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command
+from aiogram.enums import ChatType
 import asyncio
 from dotenv import load_dotenv
 import os
@@ -95,12 +96,12 @@ class UpdateContent(StatesGroup):
     waiting_for_america_time = State()
     waiting_for_photo = State()
 
-@dp.message(Command(commands=['setbanner']))
-async def cmd_start_update_banner(message: types.Message, state: FSMContext):
+@dp.message(Command(commands=['setbanner'], ignore_mention=True))
+async def cmd_start_update_banner(message: types.Message, state: FSMContext, command: Command):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
         return
-    await state.update_data(section=message.text[1:])
+    await state.update_data(section=command.command)
     await message.reply(
         "أرسل البيانات بهذا الشكل:\n"
         "عنوان المحتوى ; اسم الحدث\n"
@@ -109,12 +110,12 @@ async def cmd_start_update_banner(message: types.Message, state: FSMContext):
     )
     await state.set_state(UpdateContent.waiting_for_title_and_name)
 
-@dp.message(Command(commands=['setabyss', 'setstygian', 'settheater']))
-async def cmd_start_update_single_title_only(message: types.Message, state: FSMContext):
+@dp.message(Command(commands=['setabyss', 'setstygian', 'settheater'], ignore_mention=True))
+async def cmd_start_update_single_title_only(message: types.Message, state: FSMContext, command: Command):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
         return
-    await state.update_data(section=message.text[1:])
+    await state.update_data(section=command.command)
     await message.reply(
         "أرسل البيانات بهذا الشكل:\n"
         "عنوان المحتوى\n"
@@ -123,12 +124,12 @@ async def cmd_start_update_single_title_only(message: types.Message, state: FSMC
     )
     await state.set_state(UpdateContent.waiting_for_title)
 
-@dp.message(Command(commands=['setevent'])) # Changed from 'setevents' to 'setevent'
-async def cmd_start_update_events(message: types.Message, state: FSMContext):
+@dp.message(Command(commands=['setevent'], ignore_mention=True))
+async def cmd_start_update_events(message: types.Message, state: FSMContext, command: Command):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
         return
-    await state.update_data(section=message.text[1:])
+    await state.update_data(section=command.command)
     await message.reply(
         "أرسل البيانات بهذا الشكل لإضافة حدث جديد:\n"
         "اسم الحدث ; YYYY-MM-DD HH:MM:SS\n"
@@ -274,9 +275,11 @@ async def process_photo(message: types.Message, state: FSMContext):
 async def process_not_photo(message: types.Message):
     await message.reply("❌ الرجاء إرسال صورة فقط.")
 
-@dp.message(Command(commands=['banner', 'spiral_abyss', 'stygian', 'theater'])) # Changed 'abyss' to 'spiral_abyss'
-async def cmd_show_content_single(message: types.Message):
-    section_key = message.text[1:]
+@dp.message(Command(commands=['banner', 'spiral_abyss', 'stygian', 'theater'], ignore_mention=True),
+            F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP, ChatType.PRIVATE}))
+async def cmd_show_content_single(message: types.Message, command: Command):
+    # Use command.command to get the clean command name
+    section_key = command.command
     
     # Map the command to the database section name
     if section_key == 'spiral_abyss':
@@ -298,7 +301,7 @@ async def cmd_show_content_single(message: types.Message):
     else:
         arabic_section_titles = {
             'abyss': 'الأبِس',
-            'spiral_abyss': 'الأبِس', # Added for the new command
+            'spiral_abyss': 'الأبِس',
             'stygian': 'الاوستيجيان',
             'theater': 'مسرح الخيال',
             'banner': 'البنر'
@@ -341,7 +344,7 @@ async def cmd_show_content_single(message: types.Message):
     else:
         await message.reply(text, parse_mode="Markdown")
 
-@dp.message(Command(commands=['event'])) # Changed from 'events' to 'event'
+@dp.message(Command(commands=['event'], ignore_mention=True))
 async def cmd_show_events(message: types.Message):
     now_utc = datetime.now(timezone.utc)
     now_str = now_utc.strftime("%Y-%m-%d %H:%M:%S")
@@ -369,8 +372,8 @@ async def cmd_show_events(message: types.Message):
 
     await message.reply(text, parse_mode="Markdown")
 
-@dp.message(Command(commands=['delevents']))
-async def cmd_delete_events(message: types.Message):
+@dp.message(Command(commands=['delevents'], ignore_mention=True))
+async def cmd_delete_events(message: types.Message, command: Command):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية حذف الأحداث.")
         return
@@ -379,8 +382,8 @@ async def cmd_delete_events(message: types.Message):
     conn.commit()
     await message.reply("✅ تم حذف جميع الأحداث بنجاح.")
 
-@dp.message(Command(commands=['addadmin']))
-async def cmd_addadmin(message: types.Message):
+@dp.message(Command(commands=['addadmin'], ignore_mention=True))
+async def cmd_addadmin(message: types.Message, command: Command):
     if message.from_user.id != OWNER_ID:
         await message.reply("🚫 فقط المالك يمكنه إضافة مشرفين.")
         return
@@ -396,8 +399,8 @@ async def cmd_addadmin(message: types.Message):
     except:
         await message.reply("❌ حدث خطأ أثناء الإضافة.")
 
-@dp.message(Command(commands=['removeadmin']))
-async def cmd_removeadmin(message: types.Message):
+@dp.message(Command(commands=['removeadmin'], ignore_mention=True))
+async def cmd_removeadmin(message: types.Message, command: Command):
     if message.from_user.id != OWNER_ID:
         await message.reply("🚫 فقط المالك يمكنه إزالة المشرفين.")
         return
@@ -416,19 +419,19 @@ async def cmd_removeadmin(message: types.Message):
     except:
         await message.reply("❌ حدث خطأ أثناء الحذف.")
 
-@dp.message(Command(commands=['start']))
-async def cmd_start(message: types.Message):
+@dp.message(Command(commands=['start'], ignore_mention=True))
+async def cmd_start(message: types.Message, command: Command):
     await message.reply(
         "مرحبًا! أنا بوت مواعيد Genshin.\n"
         "الأوامر:\n"
         "/banner - عرض البنر الحالي\n"
-        "/event - عرض الأحداث\n" # Changed from 'events' to 'event'
-        "/spiral_abyss - عرض موعد الأبِس\n" # Changed from 'abyss' to 'spiral_abyss'
+        "/event - عرض الأحداث\n"
+        "/spiral_abyss - عرض موعد الأبِس\n"
         "/stygian - عرض موعد أوستيجيان\n"
         "/theater - عرض موعد مسرح الخيال\n\n"
         "للمشرفين:\n"
         "/setbanner - تحديث البنر (يرسل نص ثم صورة)\n"
-        "/setevent - إضافة حدث جديد (يرسل نص فقط)\n" # Changed from 'setevents' to 'setevent'
+        "/setevent - إضافة حدث جديد (يرسل نص فقط)\n"
         "/delevents - حذف جميع الأحداث (للمشرفين)\n"
         "/setabyss - تحديث الأبِس (يرسل نص ثم صورة)\n"
         "/setstygian - تحديث أوستيجيان (يرسل نص ثم صورة)\n"
