@@ -112,7 +112,6 @@ async def cmd_start_update_single_title_only(message: types.Message, state: FSMC
         return
     
     command_text = command.command
-    
     await state.update_data(section=command_text.replace("set", "").replace("_ar", ""))
     
     if 'banner' in command_text:
@@ -283,14 +282,9 @@ async def process_not_photo(message: types.Message):
     await message.reply("❌ الرجاء إرسال صورة فقط.")
 
 # Unified handler for showing content
-@dp.message(Command(
-    'banner',
-    'abyss',
-    'stygian',
-    'theater'
-))
+@dp.message(Command('banner', 'abyss', 'stygian', 'theater'))
 @dp.message(F.text.lower().in_(['البنر', 'الابيس', 'ستيجيان', 'المسرح']))
-async def cmd_show_content_single(message: types.Message, command: Command=None):
+async def cmd_show_content_single(message: types.Message, command: Command = None):
     section_map = {
         'banner': 'banner', 'البنر': 'banner',
         'abyss': 'abyss', 'الابيس': 'abyss',
@@ -298,7 +292,6 @@ async def cmd_show_content_single(message: types.Message, command: Command=None)
         'theater': 'theater', 'المسرح': 'theater'
     }
 
-    # Use the command object if available, otherwise use the message text
     if command:
         section_key = section_map.get(command.command)
     else:
@@ -306,7 +299,7 @@ async def cmd_show_content_single(message: types.Message, command: Command=None)
     
     if not section_key:
         return
-    
+        
     cursor.execute("SELECT title, name, end_time_asia, end_time_europe, end_time_america, image_file_id FROM content WHERE section=?", (section_key,))
     row = cursor.fetchone()
     
@@ -415,7 +408,6 @@ async def cmd_addadmin(message: types.Message, command: Command=None):
     if command and command.args:
         args = command.args.split()
     else:
-        # Fallback for Arabic command
         args = message.text.split()[1:]
         
     if not args:
@@ -440,7 +432,6 @@ async def cmd_removeadmin(message: types.Message, command: Command=None):
     if command and command.args:
         args = command.args.split()
     else:
-        # Fallback for Arabic command
         args = message.text.split()[1:]
         
     if not args:
