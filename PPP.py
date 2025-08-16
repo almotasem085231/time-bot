@@ -282,14 +282,15 @@ async def process_not_photo(message: types.Message):
     await message.reply("❌ الرجاء إرسال صورة فقط.")
 
 # Unified handler for showing content
-@dp.message(Command('banner', 'abyss', 'stygian', 'theater'))
+@dp.message(Command('banner', 'abyss', 'stygian', 'theater', 'spiral_abyss'))
 @dp.message(F.text.lower().in_(['البنر', 'الابيس', 'ستيجيان', 'المسرح']))
 async def cmd_show_content_single(message: types.Message, command: Command = None):
     section_map = {
         'banner': 'banner', 'البنر': 'banner',
         'abyss': 'abyss', 'الابيس': 'abyss',
         'stygian': 'stygian', 'ستيجيان': 'stygian',
-        'theater': 'theater', 'المسرح': 'theater'
+        'theater': 'theater', 'المسرح': 'المسرح',
+        'spiral_abyss': 'abyss' # Added alias
     }
 
     if command:
@@ -357,7 +358,7 @@ async def cmd_show_content_single(message: types.Message, command: Command = Non
         await message.reply(text, parse_mode="Markdown")
 
 # Unified handler for events
-@dp.message(Command('events'))
+@dp.message(Command('events', 'event'))
 @dp.message(F.text.lower().in_(['الاحداث']))
 async def cmd_show_events(message: types.Message):
     now_utc = datetime.now(timezone.utc)
