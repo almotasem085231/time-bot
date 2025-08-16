@@ -96,17 +96,26 @@ class UpdateContent(StatesGroup):
     waiting_for_photo = State()
 
 # Unified handler for setting commands
-@dp.message(F.text.lower().in_(['/setbanner', 'setbanner_ar', '/setabyss', 'setabyss_ar', '/setstygian', 'setstygian_ar', '/settheater', 'settheater_ar']))
-async def cmd_start_update_single_title_only(message: types.Message, state: FSMContext):
+@dp.message(Command(
+    'setbanner',
+    'setbanner_ar',
+    'setabyss',
+    'setabyss_ar',
+    'setstygian',
+    'setstygian_ar',
+    'settheater',
+    'settheater_ar'
+))
+async def cmd_start_update_single_title_only(message: types.Message, state: FSMContext, command: Command):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
         return
     
-    command_text = message.text.lower().replace('/', '').replace('_ar', '')
+    command_text = command.command
     
-    await state.update_data(section=command_text.replace("set", ""))
+    await state.update_data(section=command_text.replace("set", "").replace("_ar", ""))
     
-    if command_text == 'setbanner':
+    if 'banner' in command_text:
         await message.reply(
             "أرسل البيانات بهذا الشكل:\n"
             "عنوان المحتوى ; اسم الحدث\n"
@@ -123,7 +132,7 @@ async def cmd_start_update_single_title_only(message: types.Message, state: FSMC
         )
         await state.set_state(UpdateContent.waiting_for_title)
 
-@dp.message(F.text.lower().in_(['/setevents', 'setevents_ar']))
+@dp.message(Command('setevents', 'setevents_ar'))
 async def cmd_start_update_events(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
@@ -274,8 +283,14 @@ async def process_not_photo(message: types.Message):
     await message.reply("❌ الرجاء إرسال صورة فقط.")
 
 # Unified handler for showing content
-@dp.message(F.text.lower().in_(['/banner', 'البنر', '/abyss', 'الابيس', '/stygian', 'ستيجيان', '/theater', 'المسرح']))
-async def cmd_show_content_single(message: types.Message):
+@dp.message(Command(
+    'banner',
+    'abyss',
+    'stygian',
+    'theater'
+))
+@dp.message(F.text.lower().in_(['البنر', 'الابيس', 'ستيجيان', 'المسرح']))
+async def cmd_show_content_single(message: types.Message, command: Command=None):
     section_map = {
         'banner': 'banner', 'البنر': 'banner',
         'abyss': 'abyss', 'الابيس': 'abyss',
@@ -283,14 +298,12 @@ async def cmd_show_content_single(message: types.Message):
         'theater': 'theater', 'المسرح': 'theater'
     }
 
-    # Extract command text and clean it
-    command_text = message.text.lower()
-    if '@' in command_text:
-        command_text = command_text.split('@')[0]
-    command_text = command_text.lstrip('/')
-
-    section_key = section_map.get(command_text)
-
+    # Use the command object if available, otherwise use the message text
+    if command:
+        section_key = section_map.get(command.command)
+    else:
+        section_key = section_map.get(message.text.lower())
+    
     if not section_key:
         return
     
@@ -351,7 +364,8 @@ async def cmd_show_content_single(message: types.Message):
         await message.reply(text, parse_mode="Markdown")
 
 # Unified handler for events
-@dp.message(F.text.lower().in_(['/events', 'الاحداث']))
+@dp.message(Command('events'))
+@dp.message(F.text.lower().in_(['الاحداث']))
 async def cmd_show_events(message: types.Message):
     now_utc = datetime.now(timezone.utc)
     now_str = now_utc.strftime("%Y-%m-%d %H:%M:%S")
@@ -379,7 +393,8 @@ async def cmd_show_events(message: types.Message):
     await message.reply(text, parse_mode="Markdown")
 
 # Unified handler for deleting events
-@dp.message(F.text.lower().in_(['/delevents', 'حذف_الاحداث']))
+@dp.message(Command('delevents'))
+@dp.message(F.text.lower().in_(['حذف_الاحداث']))
 async def cmd_delete_events(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية حذف الأحداث.")
@@ -390,12 +405,19 @@ async def cmd_delete_events(message: types.Message):
     await message.reply("✅ تم حذف جميع الأحداث بنجاح.")
 
 # Unified handler for adding admin
-@dp.message(F.text.lower().startswith('/addadmin') | F.text.lower().startswith('اضافة_مشرف'))
-async def cmd_addadmin(message: types.Message):
+@dp.message(Command('addadmin'))
+@dp.message(F.text.lower().startswith('اضافة_مشرف'))
+async def cmd_addadmin(message: types.Message, command: Command=None):
     if message.from_user.id != OWNER_ID:
         await message.reply("🚫 فقط المالك يمكنه إضافة مشرفين.")
         return
-    args = message.text.split()[1:]
+    
+    if command and command.args:
+        args = command.args.split()
+    else:
+        # Fallback for Arabic command
+        args = message.text.split()[1:]
+        
     if not args:
         await message.reply("يرجى كتابة معرف المستخدم لإضافته كمشرف.\nمثال:\n/addadmin 123456789")
         return
@@ -404,16 +426,23 @@ async def cmd_addadmin(message: types.Message):
         cursor.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (new_id,))
         conn.commit()
         await message.reply(f"✅ تم إضافة المستخدم {new_id} كمشرف.")
-    except:
-        await message.reply("❌ حدث خطأ أثناء الإضافة.")
+    except (ValueError, IndexError):
+        await message.reply("❌ حدث خطأ أثناء الإضافة. يرجى التأكد من أن المعرف هو رقم صحيح.")
 
 # Unified handler for removing admin
-@dp.message(F.text.lower().startswith('/removeadmin') | F.text.lower().startswith('ازالة_مشرف'))
-async def cmd_removeadmin(message: types.Message):
+@dp.message(Command('removeadmin'))
+@dp.message(F.text.lower().startswith('ازالة_مشرف'))
+async def cmd_removeadmin(message: types.Message, command: Command=None):
     if message.from_user.id != OWNER_ID:
         await message.reply("🚫 فقط المالك يمكنه إزالة المشرفين.")
         return
-    args = message.text.split()[1:]
+        
+    if command and command.args:
+        args = command.args.split()
+    else:
+        # Fallback for Arabic command
+        args = message.text.split()[1:]
+        
     if not args:
         await message.reply("يرجى كتابة معرف المستخدم لإزالته من المشرفين.\nمثال:\n/removeadmin 123456789")
         return
@@ -425,11 +454,12 @@ async def cmd_removeadmin(message: types.Message):
         cursor.execute("DELETE FROM admins WHERE user_id = ?", (rem_id,))
         conn.commit()
         await message.reply(f"✅ تم إزالة المستخدم {rem_id} من المشرفين.")
-    except:
-        await message.reply("❌ حدث خطأ أثناء الحذف.")
+    except (ValueError, IndexError):
+        await message.reply("❌ حدث خطأ أثناء الحذف. يرجى التأكد من أن المعرف هو رقم صحيح.")
 
 # Unified handler for start/help message
-@dp.message(F.text.lower().in_(['/start', 'بدء']))
+@dp.message(Command('start', 'help'))
+@dp.message(F.text.lower().in_(['بدء']))
 async def cmd_start(message: types.Message):
     await message.reply(
         "مرحبًا! أنا بوت مواعيد Genshin.\n"
