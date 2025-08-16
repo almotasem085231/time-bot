@@ -5,7 +5,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command
-from aiogram.enums import ChatType
 import asyncio
 from dotenv import load_dotenv
 import os
@@ -96,12 +95,13 @@ class UpdateContent(StatesGroup):
     waiting_for_america_time = State()
     waiting_for_photo = State()
 
-@dp.message(Command(commands=['setbanner'], ignore_mention=True))
-async def cmd_start_update_banner(message: types.Message, state: FSMContext, command: Command):
+# English commands
+@dp.message(Command(commands=['setbanner']))
+async def cmd_start_update_banner_en(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
         return
-    await state.update_data(section=command.command)
+    await state.update_data(section='banner')
     await message.reply(
         "أرسل البيانات بهذا الشكل:\n"
         "عنوان المحتوى ; اسم الحدث\n"
@@ -110,12 +110,28 @@ async def cmd_start_update_banner(message: types.Message, state: FSMContext, com
     )
     await state.set_state(UpdateContent.waiting_for_title_and_name)
 
-@dp.message(Command(commands=['setabyss', 'setstygian', 'settheater'], ignore_mention=True))
-async def cmd_start_update_single_title_only(message: types.Message, state: FSMContext, command: Command):
+# Arabic commands
+@dp.message(F.text == 'setbanner_ar')
+async def cmd_start_update_banner_ar(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
         return
-    await state.update_data(section=command.command)
+    await state.update_data(section='banner')
+    await message.reply(
+        "أرسل البيانات بهذا الشكل:\n"
+        "عنوان المحتوى ; اسم الحدث\n"
+        "مثال:\n"
+        "بنرات 5.8 النصف الاول ; سيتلالي + اينيفيا\n"
+    )
+    await state.set_state(UpdateContent.waiting_for_title_and_name)
+
+# English commands
+@dp.message(Command(commands=['setabyss', 'setstygian', 'settheater']))
+async def cmd_start_update_single_title_only_en(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
+        return
+    await state.update_data(section=message.text[1:])
     await message.reply(
         "أرسل البيانات بهذا الشكل:\n"
         "عنوان المحتوى\n"
@@ -124,12 +140,44 @@ async def cmd_start_update_single_title_only(message: types.Message, state: FSMC
     )
     await state.set_state(UpdateContent.waiting_for_title)
 
-@dp.message(Command(commands=['setevent'], ignore_mention=True))
-async def cmd_start_update_events(message: types.Message, state: FSMContext, command: Command):
+# Arabic commands
+@dp.message(F.text.in_(['setabyss_ar', 'setstygian_ar', 'settheater_ar']))
+async def cmd_start_update_single_title_only_ar(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
         return
-    await state.update_data(section=command.command)
+    section = message.text.replace('_ar', '')
+    await state.update_data(section=section)
+    await message.reply(
+        "أرسل البيانات بهذا الشكل:\n"
+        "عنوان المحتوى\n"
+        "مثال:\n"
+        "أبس 5.8\n"
+    )
+    await state.set_state(UpdateContent.waiting_for_title)
+
+# English commands
+@dp.message(Command(commands=['setevents']))
+async def cmd_start_update_events_en(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
+        return
+    await state.update_data(section=message.text[1:])
+    await message.reply(
+        "أرسل البيانات بهذا الشكل لإضافة حدث جديد:\n"
+        "اسم الحدث ; YYYY-MM-DD HH:MM:SS\n"
+        "مثال:\n"
+        "حدث جديد ; 2025-10-25 15:30:00\n"
+    )
+    await state.set_state(UpdateContent.waiting_for_event_text)
+
+# Arabic commands
+@dp.message(F.text == 'setevents_ar')
+async def cmd_start_update_events_ar(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
+        return
+    await state.update_data(section='events')
     await message.reply(
         "أرسل البيانات بهذا الشكل لإضافة حدث جديد:\n"
         "اسم الحدث ; YYYY-MM-DD HH:MM:SS\n"
@@ -189,7 +237,6 @@ async def process_event_text(message: types.Message, state: FSMContext):
     conn.commit()
     await message.reply(f"✅ تم إضافة حدث جديد بنجاح.")
     await state.clear()
-
 
 @dp.message(UpdateContent.waiting_for_asia_time, F.content_type == types.ContentType.TEXT)
 async def process_asia_time(message: types.Message, state: FSMContext):
@@ -275,19 +322,26 @@ async def process_photo(message: types.Message, state: FSMContext):
 async def process_not_photo(message: types.Message):
     await message.reply("❌ الرجاء إرسال صورة فقط.")
 
-@dp.message(Command(commands=['banner', 'spiral_abyss', 'stygian', 'theater'], ignore_mention=True),
-            F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP, ChatType.PRIVATE}))
-async def cmd_show_content_single(message: types.Message, command: Command):
-    # Use command.command to get the clean command name
-    section_key = command.command
-    
-    # Map the command to the database section name
-    if section_key == 'spiral_abyss':
-        db_section = 'abyss'
-    else:
-        db_section = section_key
-    
-    cursor.execute("SELECT title, name, end_time_asia, end_time_europe, end_time_america, image_file_id FROM content WHERE section=?", (db_section,))
+# English commands
+@dp.message(Command(commands=['banner', 'abyss', 'stygian', 'theater']))
+async def cmd_show_content_single_en(message: types.Message):
+    section_key = message.text[1:]
+    await show_content(message, section_key)
+
+# Arabic commands
+@dp.message(F.text.in_(['البنر', 'الابيس', 'ستيجيان', 'المسرح']))
+async def cmd_show_content_single_ar(message: types.Message):
+    section_map = {
+        'البنر': 'banner',
+        'الابيس': 'abyss',
+        'ستيجيان': 'stygian',
+        'المسرح': 'theater'
+    }
+    section_key = section_map.get(message.text)
+    await show_content(message, section_key)
+
+async def show_content(message: types.Message, section_key: str):
+    cursor.execute("SELECT title, name, end_time_asia, end_time_europe, end_time_america, image_file_id FROM content WHERE section=?", (section_key,))
     row = cursor.fetchone()
     
     if not row:
@@ -301,9 +355,8 @@ async def cmd_show_content_single(message: types.Message, command: Command):
     else:
         arabic_section_titles = {
             'abyss': 'الأبِس',
-            'spiral_abyss': 'الأبِس',
-            'stygian': 'الاوستيجيان',
-            'theater': 'مسرح الخيال',
+            'stygian': 'ستيجيان',
+            'theater': 'المسرح',
             'banner': 'البنر'
         }
         arabic_section_title = arabic_section_titles.get(section_key, section_key)
@@ -344,8 +397,17 @@ async def cmd_show_content_single(message: types.Message, command: Command):
     else:
         await message.reply(text, parse_mode="Markdown")
 
-@dp.message(Command(commands=['event'], ignore_mention=True))
-async def cmd_show_events(message: types.Message):
+# English commands
+@dp.message(Command(commands=['events']))
+async def cmd_show_events_en(message: types.Message):
+    await show_events(message)
+
+# Arabic commands
+@dp.message(F.text == 'الاحداث')
+async def cmd_show_events_ar(message: types.Message):
+    await show_events(message)
+
+async def show_events(message: types.Message):
     now_utc = datetime.now(timezone.utc)
     now_str = now_utc.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -372,8 +434,17 @@ async def cmd_show_events(message: types.Message):
 
     await message.reply(text, parse_mode="Markdown")
 
-@dp.message(Command(commands=['delevents'], ignore_mention=True))
-async def cmd_delete_events(message: types.Message, command: Command):
+# English commands
+@dp.message(Command(commands=['delevents']))
+async def cmd_delete_events_en(message: types.Message):
+    await delete_events(message)
+
+# Arabic commands
+@dp.message(F.text == 'حذف_الاحداث')
+async def cmd_delete_events_ar(message: types.Message):
+    await delete_events(message)
+
+async def delete_events(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية حذف الأحداث.")
         return
@@ -382,8 +453,17 @@ async def cmd_delete_events(message: types.Message, command: Command):
     conn.commit()
     await message.reply("✅ تم حذف جميع الأحداث بنجاح.")
 
-@dp.message(Command(commands=['addadmin'], ignore_mention=True))
-async def cmd_addadmin(message: types.Message, command: Command):
+# English commands
+@dp.message(Command(commands=['addadmin']))
+async def cmd_addadmin_en(message: types.Message):
+    await add_admin(message)
+
+# Arabic commands
+@dp.message(F.text.startswith('اضافة_مشرف'))
+async def cmd_addadmin_ar(message: types.Message):
+    await add_admin(message)
+
+async def add_admin(message: types.Message):
     if message.from_user.id != OWNER_ID:
         await message.reply("🚫 فقط المالك يمكنه إضافة مشرفين.")
         return
@@ -399,8 +479,17 @@ async def cmd_addadmin(message: types.Message, command: Command):
     except:
         await message.reply("❌ حدث خطأ أثناء الإضافة.")
 
-@dp.message(Command(commands=['removeadmin'], ignore_mention=True))
-async def cmd_removeadmin(message: types.Message, command: Command):
+# English commands
+@dp.message(Command(commands=['removeadmin']))
+async def cmd_removeadmin_en(message: types.Message):
+    await remove_admin(message)
+
+# Arabic commands
+@dp.message(F.text.startswith('ازالة_مشرف'))
+async def cmd_removeadmin_ar(message: types.Message):
+    await remove_admin(message)
+
+async def remove_admin(message: types.Message):
     if message.from_user.id != OWNER_ID:
         await message.reply("🚫 فقط المالك يمكنه إزالة المشرفين.")
         return
@@ -419,26 +508,35 @@ async def cmd_removeadmin(message: types.Message, command: Command):
     except:
         await message.reply("❌ حدث خطأ أثناء الحذف.")
 
-@dp.message(Command(commands=['start'], ignore_mention=True))
-async def cmd_start(message: types.Message, command: Command):
+# English command
+@dp.message(Command(commands=['start']))
+async def cmd_start_en(message: types.Message):
+    await show_help(message)
+
+# Arabic command
+@dp.message(F.text == 'بدء')
+async def cmd_start_ar(message: types.Message):
+    await show_help(message)
+
+async def show_help(message: types.Message):
     await message.reply(
         "مرحبًا! أنا بوت مواعيد Genshin.\n"
         "الأوامر:\n"
-        "/banner - عرض البنر الحالي\n"
-        "/event - عرض الأحداث\n"
-        "/spiral_abyss - عرض موعد الأبِس\n"
-        "/stygian - عرض موعد أوستيجيان\n"
-        "/theater - عرض موعد مسرح الخيال\n\n"
+        "banner أو البنر - عرض البنر الحالي\n"
+        "events أو الاحداث - عرض الأحداث\n"
+        "abyss أو الابيس - عرض موعد الأبِس\n"
+        "stygian أو ستيجيان - عرض موعد ستيجيان\n"
+        "theater أو المسرح - عرض موعد المسرح\n\n"
         "للمشرفين:\n"
-        "/setbanner - تحديث البنر (يرسل نص ثم صورة)\n"
-        "/setevent - إضافة حدث جديد (يرسل نص فقط)\n"
-        "/delevents - حذف جميع الأحداث (للمشرفين)\n"
-        "/setabyss - تحديث الأبِس (يرسل نص ثم صورة)\n"
-        "/setstygian - تحديث أوستيجيان (يرسل نص ثم صورة)\n"
-        "/settheater - تحديث مسرح الخيال (يرسل نص ثم صورة)\n\n"
+        "setbanner أو setbanner_ar - تحديث البنر (يرسل نص ثم صورة)\n"
+        "setevents أو setevents_ar - إضافة حدث جديد (يرسل نص فقط)\n"
+        "delevents أو حذف_الاحداث - حذف جميع الأحداث (للمشرفين)\n"
+        "setabyss أو setabyss_ar - تحديث الأبِس (يرسل نص ثم صورة)\n"
+        "setstygian أو setstygian_ar - تحديث ستيجيان (يرسل نص ثم صورة)\n"
+        "settheater أو settheater_ar - تحديث المسرح (يرسل نص ثم صورة)\n\n"
         "لإضافة/حذف مشرفين:\n"
-        "/addadmin [user_id]\n"
-        "/removeadmin [user_id]"
+        "addadmin [user_id] أو اضافة_مشرف [user_id]\n"
+        "removeadmin [user_id] أو ازالة_مشرف [user_id]"
     )
 
 async def main():
