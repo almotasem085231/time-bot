@@ -289,8 +289,8 @@ async def cmd_show_content_single(message: types.Message, command: Command = Non
         'banner': 'banner', 'البنر': 'banner',
         'abyss': 'abyss', 'الابيس': 'abyss',
         'stygian': 'stygian', 'ستيجيان': 'stygian',
-        'theater': 'theater', 'المسرح': 'المسرح',
-        'spiral_abyss': 'abyss' # Added alias
+        'theater': 'theater', 'المسرح': 'theater', # <-- The fix is here
+        'spiral_abyss': 'abyss' 
     }
 
     if command:
