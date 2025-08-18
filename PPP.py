@@ -300,14 +300,14 @@ async def cmd_show_content_single(message: types.Message, command: Command = Non
     
     if not section_key:
         return
-        
+    
     cursor.execute("SELECT title, name, end_time_asia, end_time_europe, end_time_america, image_file_id FROM content WHERE section=?", (section_key,))
     row = cursor.fetchone()
     
     if not row:
         await message.reply(f"لا يوجد محتوى مضاف لقسم {section_key}.")
         return
-        
+    
     title, name, end_time_asia, end_time_europe, end_time_america, file_id = row
     
     if title:
@@ -397,6 +397,18 @@ async def cmd_delete_events(message: types.Message):
     cursor.execute("DELETE FROM content WHERE section='events'")
     conn.commit()
     await message.reply("✅ تم حذف جميع الأحداث بنجاح.")
+
+# New handler for the custom 'الاوامر' command
+@dp.message(F.text.lower().in_(['الاوامر']))
+async def cmd_custom_commands(message: types.Message):
+    await message.reply(
+        "اوامر بوت ساندرون :\n\n"
+        "/ banner البنر او\n"
+        "/ stygian ستيجيان او\n"
+        "/ spiral_abyss الابيس او\n"
+        "/ theater المسرح او\n"
+        "/ event الاحداث او"
+    )
 
 # Unified handler for adding admin
 @dp.message(Command('addadmin'))
