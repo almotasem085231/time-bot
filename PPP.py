@@ -403,11 +403,11 @@ async def cmd_delete_events(message: types.Message):
 async def cmd_custom_commands(message: types.Message):
     await message.reply(
         "اوامر بوت ساندرون :\n\n"
-        "/ banner البنر او\n"
-        "/ stygian ستيجيان او\n"
-        "/ spiral_abyss الابيس او\n"
-        "/ theater المسرح او\n"
-        "/ event الاحداث او"
+        "/banner البنر او\n"
+        "/stygian ستيجيان او\n"
+        "/spiral_abyss الابيس او\n"
+        "/theater المسرح او\n"
+        "/event الاحداث او"
     )
 
 # Unified handler for adding admin
