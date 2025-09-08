@@ -289,7 +289,7 @@ async def cmd_show_content_single(message: types.Message, command: Command = Non
         'banner': 'banner', 'البنر': 'banner',
         'abyss': 'abyss', 'الابيس': 'abyss',
         'stygian': 'stygian', 'ستيجيان': 'stygian',
-        'theater': 'theater', 'المسرح': 'theater', # <-- The fix is here
+        'theater': 'theater', 'المسرح': 'theater',
         'spiral_abyss': 'abyss' 
     }
 
@@ -326,16 +326,20 @@ async def cmd_show_content_single(message: types.Message, command: Command = Non
         text += f"**{name}**\n\n"
     
     times_dict = {
-        'end_time_asia': end_time_asia,
-        'end_time_europe': end_time_europe,
-        'end_time_america': end_time_america
+        'asia': end_time_asia,
+        'europe': end_time_europe,
+        'america': end_time_america
     }
     
     server_name_map = {
-        'end_time_asia': 'اسيا',
-        'end_time_europe': 'اوروبا',
-        'end_time_america': 'امريكا'
+        'asia': 'اسيا',
+        'europe': 'اوروبا',
+        'america': 'امريكا'
     }
+    
+    # Get server offsets from the database
+    cursor.execute("SELECT server, offset_hours FROM server_offsets")
+    offsets = dict(cursor.fetchall())
     
     now_utc = datetime.now(timezone.utc)
     
@@ -345,10 +349,16 @@ async def cmd_show_content_single(message: types.Message, command: Command = Non
         
         arabic_server_name = server_name_map.get(server_key, server_key)
         
-        # The stored time is now UTC, so we can replace the timezone directly
+        # The stored time is now UTC
         end_time_utc = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-        time_left = time_left_str(end_time_utc, now_utc)
-
+        
+        # Correctly get the time left by calculating it relative to the server's local time
+        offset = offsets.get(server_key, 0)
+        now_with_offset = now_utc.astimezone(timezone(timedelta(hours=offset)))
+        end_time_with_offset = end_time_utc.astimezone(timezone(timedelta(hours=offset)))
+        
+        time_left = time_left_str(end_time_with_offset, now_with_offset)
+        
         text += f"⏳الوقت المتبقي سيرفر {arabic_server_name} :\n"
         text += f" ●← {time_left}\n\n"
     
@@ -361,6 +371,10 @@ async def cmd_show_content_single(message: types.Message, command: Command = Non
 @dp.message(Command('events', 'event'))
 @dp.message(F.text.lower().in_(['الاحداث']))
 async def cmd_show_events(message: types.Message):
+    # Get Asia server offset for event calculation
+    cursor.execute("SELECT offset_hours FROM server_offsets WHERE server = 'asia'")
+    asia_offset = cursor.fetchone()[0]
+
     now_utc = datetime.now(timezone.utc)
     now_str = now_utc.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -377,8 +391,15 @@ async def cmd_show_events(message: types.Message):
     text = "📌 **قائمة الأحداث الحالية:**\n\n"
     for i, event in enumerate(events):
         name, end_time_str = event
+        
+        # Convert UTC end time to Asia's local time
         end_time_utc = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-        time_left = time_left_str(end_time_utc, now_utc)
+        end_time_asia_local = end_time_utc.astimezone(timezone(timedelta(hours=asia_offset)))
+        
+        # Convert current UTC time to Asia's local time
+        now_asia_local = now_utc.astimezone(timezone(timedelta(hours=asia_offset)))
+        
+        time_left = time_left_str(end_time_asia_local, now_asia_local)
         
         text += f"**{i+1}. {name}**\n\n"
         text += f"⏳الوقت المتبقي\n{time_left}\n"
