@@ -67,12 +67,12 @@ def time_left_str(end_time: datetime, now: datetime) -> str:
     total_seconds = int(diff.total_seconds())
     if total_seconds <= 0:
         return "انتهى."
-
+    
     days = total_seconds // 86400
     hours = (total_seconds % 86400) // 3600
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
-
+    
     return f"{days} يوم و {hours} ساعة و {minutes} دقيقة و {seconds} ثانية"
 
 def parse_end_datetime(date_time_str: str, offset_hours: int = 0):
@@ -97,8 +97,8 @@ class UpdateContent(StatesGroup):
 
 # Unified handler for setting commands
 @dp.message(Command(
-    'setbanner',
-    'setbanner_ar',
+    'setthe_banner',
+    'setthe_banner_ar',
     'setabyss',
     'setabyss_ar',
     'setstygian',
@@ -110,11 +110,11 @@ async def cmd_start_update_single_title_only(message: types.Message, state: FSMC
     if not is_admin(message.from_user.id):
         await message.reply("🚫 ليس لديك صلاحية تعديل المحتوى.")
         return
-
+    
     command_text = command.command
     await state.update_data(section=command_text.replace("set", "").replace("_ar", ""))
-
-    if 'banner' in command_text:
+    
+    if 'the_banner' in command_text:
         await message.reply(
             "أرسل البيانات بهذا الشكل:\n"
             "عنوان المحتوى ; اسم الحدث\n"
@@ -151,7 +151,7 @@ async def process_title(message: types.Message, state: FSMContext):
     if not title:
         await message.reply("❌ العنوان لا يمكن أن يكون فارغًا. يرجى إرسال: عنوان المحتوى")
         return
-
+    
     await state.update_data(title=title, name="")
     await message.reply("يرجى إدخال وقت انتهاء سيرفر آسيا: YYYY-MM-DD HH:MM:SS")
     await state.set_state(UpdateContent.waiting_for_asia_time)
@@ -160,14 +160,14 @@ async def process_title(message: types.Message, state: FSMContext):
 async def process_title_and_name(message: types.Message, state: FSMContext):
     text = message.text
     parts = [p.strip() for p in text.split(";", 1)]
-
+    
     if len(parts) < 2:
         await message.reply("❌ الخطأ في الصيغة.\nالصيغة:\nعنوان المحتوى ; اسم الحدث")
         return
-
+    
     title = parts[0]
     name = parts[1]
-
+    
     await state.update_data(title=title, name=name)
     await message.reply("يرجى إدخال وقت انتهاء سيرفر آسيا: YYYY-MM-DD HH:MM:SS")
     await state.set_state(UpdateContent.waiting_for_asia_time)
@@ -180,7 +180,7 @@ async def process_event_text(message: types.Message, state: FSMContext):
     if len(parts) < 2:
         await message.reply("❌ الخطأ في الصيغة.\nالصيغة:\nاسم الحدث ; YYYY-MM-DD HH:MM:SS")
         return
-
+    
     name = parts[0]
     # Use parse_end_datetime with Asia's offset
     end_time_utc = parse_end_datetime(parts[1], offset_hours=8)
@@ -190,7 +190,7 @@ async def process_event_text(message: types.Message, state: FSMContext):
 
     end_time_str = end_time_utc.strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
-        INSERT INTO content (section, name, end_time_asia)
+        INSERT INTO content (section, name, end_time_asia) 
         VALUES (?, ?, ?)
     """, ('events', name, end_time_str))
     conn.commit()
@@ -225,7 +225,7 @@ async def process_photo(message: types.Message, state: FSMContext):
     section = data['section']
     title = data.get('title', '')
     name = data.get('name', '')
-
+    
     # Get server offsets from the database
     cursor.execute("SELECT offset_hours FROM server_offsets WHERE server = 'asia'")
     asia_offset = cursor.fetchone()[0]
@@ -248,7 +248,7 @@ async def process_photo(message: types.Message, state: FSMContext):
     end_time_asia = end_time_asia_utc.strftime("%Y-%m-%d %H:%M:%S")
     end_time_europe = end_time_europe_utc.strftime("%Y-%m-%d %H:%M:%S")
     end_time_america = end_time_america_utc.strftime("%Y-%m-%d %H:%M:%S")
-
+    
     photo = message.photo[-1]
     file_id = photo.file_id
 
@@ -257,12 +257,12 @@ async def process_photo(message: types.Message, state: FSMContext):
 
     if existing_row:
         cursor.execute("""
-            UPDATE content SET
+            UPDATE content SET 
                 title=?,
-                name=?,
-                end_time_asia=?,
-                end_time_europe=?,
-                end_time_america=?,
+                name=?, 
+                end_time_asia=?, 
+                end_time_europe=?, 
+                end_time_america=?, 
                 image_file_id=?
             WHERE section=?
         """, (title, name, end_time_asia, end_time_europe, end_time_america, file_id, section))
@@ -282,43 +282,34 @@ async def process_not_photo(message: types.Message):
     await message.reply("❌ الرجاء إرسال صورة فقط.")
 
 # Unified handler for showing content
-@dp.message(Command('the_banner', 'banner', 'abyss', 'stygian', 'theater', 'spiral_abyss')) # Added 'the_banner' here
-@dp.message(F.text.lower().in_(['التبنر', 'البنر', 'الابيس', 'ستيجيان', 'المسرح'])) # Added 'التبنر' here for the new command
+@dp.message(Command('the_banner', 'abyss', 'stygian', 'theater', 'spiral_abyss'))
+@dp.message(F.text.lower().in_(['البنر', 'الابيس', 'ستيجيان', 'المسرح']))
 async def cmd_show_content_single(message: types.Message, command: Command = None):
     section_map = {
-        'the_banner': 'banner', # Changed from 'banner' to 'the_banner'
-        'banner': 'banner', 'البنر': 'banner',
+        'the_banner': 'the_banner', 'البنر': 'the_banner',
         'abyss': 'abyss', 'الابيس': 'abyss',
         'stygian': 'stygian', 'ستيجيان': 'stygian',
         'theater': 'theater', 'المسرح': 'theater',
-        'spiral_abyss': 'abyss'
+        'spiral_abyss': 'abyss' 
     }
 
     if command:
         section_key = section_map.get(command.command)
     else:
-        # Map user's text input to the correct section key
-        text_to_section_map = {
-            'التبنر': 'banner', # New mapping for 'التبنر'
-            'البنر': 'banner',
-            'الابيس': 'abyss',
-            'ستيجيان': 'stygian',
-            'المسرح': 'theater',
-        }
-        section_key = text_to_section_map.get(message.text.lower())
-
+        section_key = section_map.get(message.text.lower())
+    
     if not section_key:
         return
-
+    
     cursor.execute("SELECT title, name, end_time_asia, end_time_europe, end_time_america, image_file_id FROM content WHERE section=?", (section_key,))
     row = cursor.fetchone()
-
+    
     if not row:
         await message.reply(f"لا يوجد محتوى مضاف لقسم {section_key}.")
         return
-
+    
     title, name, end_time_asia, end_time_europe, end_time_america, file_id = row
-
+    
     if title:
         text = f"🔹 **{title} :**\n\n"
     else:
@@ -326,41 +317,41 @@ async def cmd_show_content_single(message: types.Message, command: Command = Non
             'abyss': 'الأبِس',
             'stygian': 'ستيجيان',
             'theater': 'المسرح',
-            'banner': 'البنر'
+            'the_banner': 'البنر'
         }
         arabic_section_title = arabic_section_titles.get(section_key, section_key)
         text = f"🔹 **{arabic_section_title} :**\n\n"
-
-    if section_key == 'banner' and name:
+    
+    if section_key == 'the_banner' and name:
         text += f"**{name}**\n\n"
-
+    
     times_dict = {
         'end_time_asia': end_time_asia,
         'end_time_europe': end_time_europe,
         'end_time_america': end_time_america
     }
-
+    
     server_name_map = {
         'end_time_asia': 'اسيا',
         'end_time_europe': 'اوروبا',
         'end_time_america': 'امريكا'
     }
-
+    
     now_utc = datetime.now(timezone.utc)
-
+    
     for server_key, end_time_str in times_dict.items():
         if not end_time_str:
             continue
-
+        
         arabic_server_name = server_name_map.get(server_key, server_key)
-
+        
         # The stored time is now UTC, so we can replace the timezone directly
         end_time_utc = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
         time_left = time_left_str(end_time_utc, now_utc)
 
         text += f"⏳الوقت المتبقي سيرفر {arabic_server_name} :\n"
         text += f" ●← {time_left}\n\n"
-
+    
     if file_id:
         await message.reply_photo(photo=file_id, caption=text, parse_mode="Markdown")
     else:
@@ -378,7 +369,7 @@ async def cmd_show_events(message: types.Message):
 
     cursor.execute("SELECT name, end_time_asia FROM content WHERE section='events'")
     events = cursor.fetchall()
-
+    
     if not events:
         await message.reply("لا يوجد أحداث مضافة حاليًا.")
         return
@@ -388,7 +379,7 @@ async def cmd_show_events(message: types.Message):
         name, end_time_str = event
         end_time_utc = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
         time_left = time_left_str(end_time_utc, now_utc)
-
+        
         text += f"**{i+1}. {name}**\n\n"
         text += f"⏳الوقت المتبقي\n{time_left}\n"
         text += "---\n"
@@ -412,7 +403,7 @@ async def cmd_delete_events(message: types.Message):
 async def cmd_custom_commands(message: types.Message):
     await message.reply(
         "اوامر بوت ساندرون :\n\n"
-        "/the_banner البنر او\n" # Changed /banner to /the_banner
+        "/the_banner البنر او\n"
         "/stygian ستيجيان او\n"
         "/spiral_abyss الابيس او\n"
         "/theater المسرح او\n"
@@ -426,12 +417,12 @@ async def cmd_addadmin(message: types.Message, command: Command=None):
     if message.from_user.id != OWNER_ID:
         await message.reply("🚫 فقط المالك يمكنه إضافة مشرفين.")
         return
-
+    
     if command and command.args:
         args = command.args.split()
     else:
         args = message.text.split()[1:]
-
+        
     if not args:
         await message.reply("يرجى كتابة معرف المستخدم لإضافته كمشرف.\nمثال:\n/addadmin 123456789")
         return
@@ -450,12 +441,12 @@ async def cmd_removeadmin(message: types.Message, command: Command=None):
     if message.from_user.id != OWNER_ID:
         await message.reply("🚫 فقط المالك يمكنه إزالة المشرفين.")
         return
-
+        
     if command and command.args:
         args = command.args.split()
     else:
         args = message.text.split()[1:]
-
+        
     if not args:
         await message.reply("يرجى كتابة معرف المستخدم لإزالته من المشرفين.\nمثال:\n/removeadmin 123456789")
         return
@@ -477,13 +468,13 @@ async def cmd_start(message: types.Message):
     await message.reply(
         "مرحبًا! أنا بوت مواعيد Genshin.\n"
         "الأوامر:\n"
-        "/the_banner البنر أو التبـنر - عرض البنر الحالي\n" # Changed /banner to /the_banner and added 'التبنر'
+        "the_banner أو البنر - عرض البنر الحالي\n"
         "events أو الاحداث - عرض الأحداث\n"
         "abyss أو الابيس - عرض موعد الأبِس\n"
         "stygian أو ستيجيان - عرض موعد ستيجيان\n"
         "theater أو المسرح - عرض موعد المسرح\n\n"
         "للمشرفين:\n"
-        "setbanner أو setbanner_ar - تحديث البنر (يرسل نص ثم صورة)\n"
+        "setthe_banner أو setthe_banner_ar - تحديث البنر (يرسل نص ثم صورة)\n"
         "setevents أو setevents_ar - إضافة حدث جديد (يرسل نص فقط)\n"
         "delevents أو حذف_الاحداث - حذف جميع الأحداث (للمشرفين)\n"
         "setabyss أو setabyss_ar - تحديث الأبِس (يرسل نص ثم صورة)\n"
@@ -500,3 +491,9 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+---
+
+### **List of Commands for BotFather**
+
+Here is the updated list of commands to input into BotFather for your bot:
