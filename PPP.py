@@ -8,18 +8,26 @@ from aiogram.filters import Command
 import asyncio
 from dotenv import load_dotenv
 import os
+import logging # أضفنا logging لتسجيل رسائل التنبيهات
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID"))
+# 🟢 متغير جديد: معرف المجموعة/القناة لإرسال التنبيهات
+TARGET_CHAT_ID = int(os.getenv("TARGET_CHAT_ID")) 
 
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# Database Setup
+# --- Database Setup ---
 conn = sqlite3.connect("genshin_bot.db")
 cursor = conn.cursor()
+
+# --- Database Tables Setup ---
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS admins (
@@ -49,6 +57,16 @@ CREATE TABLE IF NOT EXISTS server_offsets (
 )
 """)
 
+# 🟢 جدول جديد لتتبع التنبيهات المُرسلة
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS sent_alerts (
+    content_id INTEGER,
+    server TEXT,
+    alert_type TEXT, -- '1_hour_remaining' or 'expired'
+    PRIMARY KEY (content_id, server, alert_type)
+)
+""")
+
 conn.commit()
 
 # Populate default admins and server offsets
@@ -57,6 +75,8 @@ cursor.execute("INSERT OR IGNORE INTO server_offsets (server, offset_hours) VALU
 cursor.execute("INSERT OR IGNORE INTO server_offsets (server, offset_hours) VALUES (?, ?)", ('europe', 1)) # UTC+1
 cursor.execute("INSERT OR IGNORE INTO server_offsets (server, offset_hours) VALUES (?, ?)", ('america', -5)) # UTC-5
 conn.commit()
+
+# --- Utility Functions ---
 
 def is_admin(user_id: int) -> bool:
     cursor.execute("SELECT 1 FROM admins WHERE user_id = ?", (user_id,))
@@ -67,12 +87,12 @@ def time_left_str(end_time: datetime, now: datetime) -> str:
     total_seconds = int(diff.total_seconds())
     if total_seconds <= 0:
         return "انتهى."
-
+    
     days = total_seconds // 86400
     hours = (total_seconds % 86400) // 3600
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
-
+    
     return f"{days} يوم و {hours} ساعة و {minutes} دقيقة و {seconds} ثانية"
 
 def parse_end_datetime(date_time_str: str, offset_hours: int = 0):
@@ -86,6 +106,8 @@ def parse_end_datetime(date_time_str: str, offset_hours: int = 0):
     except:
         return None
 
+# --- FSM States ---
+
 class UpdateContent(StatesGroup):
     waiting_for_title_and_name = State()
     waiting_for_title = State()
@@ -94,6 +116,94 @@ class UpdateContent(StatesGroup):
     waiting_for_europe_time = State()
     waiting_for_america_time = State()
     waiting_for_photo = State()
+
+# --- Alert System Core ---
+
+async def check_and_send_alerts():
+    """المهمة الخلفية لفحص مواعيد الانتهاء وإرسال التنبيهات."""
+    while True:
+        try:
+            now_utc = datetime.now(timezone.utc)
+            
+            # 1. جلب كل المحتوى القابل للتنبيه (باستثناء الأحداث التي تُحذف آلياً)
+            cursor.execute("SELECT id, section, title, name, end_time_asia, end_time_europe, end_time_america, image_file_id FROM content WHERE section != 'events'")
+            contents = cursor.fetchall()
+
+            for content_id, section, title, name, asia_time_str, europe_time_str, america_time_str, file_id in contents:
+                
+                # إنشاء قاموس لسهولة الوصول إلى بيانات السيرفر
+                server_data = {
+                    'asia': asia_time_str,
+                    'europe': europe_time_str,
+                    'america': america_time_str
+                }
+                
+                server_arabic_names = {
+                    'asia': 'آسيا',
+                    'europe': 'أوروبا',
+                    'america': 'أمريكا'
+                }
+
+                arabic_section_titles = {
+                    'abyss': 'الأبِس',
+                    'stygian': 'ستيجيان',
+                    'theater': 'المسرح',
+                    'banner': 'البنر'
+                }
+                
+                # تحديد اسم المحتوى في الرسالة
+                content_name = title or arabic_section_titles.get(section, section)
+                
+                for server, end_time_str in server_data.items():
+                    if not end_time_str:
+                        continue
+                    
+                    end_time_utc = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                    time_diff = end_time_utc - now_utc
+                    
+                    # 🟢 التنبيه الأول: ساعة واحدة متبقية
+                    if timedelta(hours=0) < time_diff <= timedelta(hours=1, minutes=1):
+                        alert_type = '1_hour_remaining'
+                        cursor.execute("SELECT 1 FROM sent_alerts WHERE content_id=? AND server=? AND alert_type=?", (content_id, server, alert_type))
+                        if cursor.fetchone() is None:
+                            message_text = (
+                                f"🔔 **تنبيه الإنتهاء (ساعة واحدة):**\n"
+                                f"**{content_name}** - سيرفر **{server_arabic_names[server]}**\n"
+                                f"⏳ الوقت المتبقي: حوالي ساعة واحدة."
+                            )
+                            await bot.send_message(TARGET_CHAT_ID, message_text, parse_mode="Markdown")
+                            cursor.execute("INSERT INTO sent_alerts (content_id, server, alert_type) VALUES (?, ?, ?)", (content_id, server, alert_type))
+                            conn.commit()
+                            logging.info(f"Alert sent: {content_name} - {server} ({alert_type})")
+
+                    # 🟢 التنبيه الثاني: المحتوى انتهى
+                    elif time_diff <= timedelta(minutes=0):
+                        alert_type = 'expired'
+                        cursor.execute("SELECT 1 FROM sent_alerts WHERE content_id=? AND server=? AND alert_type=?", (content_id, server, alert_type))
+                        if cursor.fetchone() is None:
+                            message_text = (
+                                f"❌ **انتهى المحتوى:**\n"
+                                f"**{content_name}** - سيرفر **{server_arabic_names[server]}**\n"
+                                f"تم إزالة المحتوى من اللعبة."
+                            )
+                            await bot.send_message(TARGET_CHAT_ID, message_text, parse_mode="Markdown")
+                            cursor.execute("INSERT INTO sent_alerts (content_id, server, alert_type) VALUES (?, ?, ?)", (content_id, server, alert_type))
+                            conn.commit()
+                            logging.info(f"Alert sent: {content_name} - {server} ({alert_type})")
+                            
+                            # اختيارياً: حذف المحتوى بالكامل بعد انتهاءه من جميع السيرفرات
+                            if all(datetime.strptime(server_data[s], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc) <= now_utc for s in server_data if server_data[s]):
+                                cursor.execute("DELETE FROM content WHERE id = ?", (content_id,))
+                                conn.commit()
+                                logging.info(f"Content deleted: {content_name} (ID: {content_id})")
+
+        except Exception as e:
+            logging.error(f"Error in alert system task: {e}")
+            
+        # الانتظار قبل الفحص التالي
+        await asyncio.sleep(30) # الفحص كل 30 ثانية
+
+# --- Command Handlers ---
 
 # Unified handler for setting commands
 @dp.message(Command(
@@ -182,7 +292,7 @@ async def process_event_text(message: types.Message, state: FSMContext):
         return
 
     name = parts[0]
-    # Use parse_end_datetime with Asia's offset
+    # Use parse_end_datetime with Asia's offset (8)
     end_time_utc = parse_end_datetime(parts[1], offset_hours=8)
     if not end_time_utc:
         await message.reply("❌ تنسيق التاريخ والوقت غير صحيح. استخدم الصيغة `YYYY-MM-DD HH:MM:SS`.")
@@ -256,6 +366,7 @@ async def process_photo(message: types.Message, state: FSMContext):
     existing_row = cursor.fetchone()
 
     if existing_row:
+        content_id = existing_row[0]
         cursor.execute("""
             UPDATE content SET
                 title=?,
@@ -266,6 +377,8 @@ async def process_photo(message: types.Message, state: FSMContext):
                 image_file_id=?
             WHERE section=?
         """, (title, name, end_time_asia, end_time_europe, end_time_america, file_id, section))
+        # 🟢 عند التحديث، احذف سجلات التنبيهات القديمة ليتم إرسالها من جديد
+        cursor.execute("DELETE FROM sent_alerts WHERE content_id = ?", (content_id,))
     else:
         cursor.execute("""
             INSERT INTO content (section, title, name, end_time_asia, end_time_europe, end_time_america, image_file_id)
@@ -274,7 +387,7 @@ async def process_photo(message: types.Message, state: FSMContext):
 
     conn.commit()
 
-    await message.reply(f"✅ تم تحديث محتوى {section} بنجاح.")
+    await message.reply(f"✅ تم تحديث محتوى {section} بنجاح. **(سيتم تفعيل التنبيهات تلقائياً)**")
     await state.clear()
 
 @dp.message(UpdateContent.waiting_for_photo, F.content_type != types.ContentType.PHOTO)
@@ -373,6 +486,7 @@ async def cmd_show_events(message: types.Message):
     now_utc = datetime.now(timezone.utc)
     now_str = now_utc.strftime("%Y-%m-%d %H:%M:%S")
 
+    # 🟢 التنظيف التلقائي للأحداث المنتهية
     cursor.execute("DELETE FROM content WHERE section='events' AND end_time_asia <= ?", (now_str,))
     conn.commit()
 
@@ -496,6 +610,8 @@ async def cmd_start(message: types.Message):
 
 async def main():
     print("بوت Genshin شغال...")
+    # 🟢 تشغيل مهمة التنبيهات الخلفية
+    asyncio.create_task(check_and_send_alerts())
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
